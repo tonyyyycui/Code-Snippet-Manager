@@ -1,0 +1,11 @@
+[
+  {
+    "name": "Bubble Sort",
+    "language": "Go",
+    "tags": [
+      "algorithm",
+      "sort"
+    ],
+    "content": "func bubbleSort(...) {...}"
+  }
+]
