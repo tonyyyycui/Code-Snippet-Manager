@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -81,49 +83,32 @@ func saveSnippets(snippets []Snippet) error {
 func addSnippet(cmd *cobra.Command, args []string) {
 	name, _ := cmd.Flags().GetString("name")
 	language, _ := cmd.Flags().GetString("language")
-	tagsStr, _ := cmd.Flags().GetString("tags")
-	content, _ := cmd.Flags().GetString("content")
+	tags, _ := cmd.Flags().GetString("tags")
 
-	if name == "" || content == "" {
-		fmt.Println("Name and content are required")
-		return
-	}
-
-	tags := []string{}
-	if tagsStr != "" {
-		for _, t := range strings.Split(tagsStr, ",") {
-			tags = append(tags, strings.TrimSpace(t))
-		}
+	// Let user edit snippet content
+	content, err := openEditor()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	snippets, err := loadSnippets()
 	if err != nil {
-		fmt.Println("Error loading snippets:", err)
-		return
-	}
-
-	// Prevent duplicates by name
-	for _, s := range snippets {
-		if s.Name == name {
-			fmt.Println("Snippet with this name already exists.")
-			return
-		}
+		log.Fatal(err)
 	}
 
 	newSnippet := Snippet{
 		Name:     name,
 		Language: language,
-		Tags:     tags,
+		Tags:     strings.Split(tags, ","),
 		Content:  content,
 	}
-	snippets = append(snippets, newSnippet)
 
+	snippets = append(snippets, newSnippet)
 	if err := saveSnippets(snippets); err != nil {
-		fmt.Println("Error saving snippet:", err)
-		return
+		log.Fatal(err)
 	}
 
-	fmt.Printf("Snippet '%s' added successfully.\n", name)
+	fmt.Println("✅ Snippet added:", name)
 }
 
 func listSnippets(cmd *cobra.Command, args []string) {
@@ -178,4 +163,35 @@ func containsTag(tags []string, query string) bool {
 		}
 	}
 	return false
+}
+
+func openEditor() (string, error) {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "nano" // fallback if EDITOR not set
+	}
+
+	tmpFile, err := os.CreateTemp("", "snippet-*.txt")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Open the editor
+	cmd := exec.Command(editor, tmpFile.Name())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+
+	// Read edited content
+	contentBytes, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		return "", err
+	}
+
+	return string(contentBytes), nil
 }

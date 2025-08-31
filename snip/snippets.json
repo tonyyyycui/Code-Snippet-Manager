@@ -7,5 +7,13 @@
       "sort"
     ],
     "content": "func bubbleSort(...) {...}"
+  },
+  {
+    "name": "hello-world",
+    "language": "go",
+    "tags": [
+      "example"
+    ],
+    "content": "print('test')\n"
   }
 ]
