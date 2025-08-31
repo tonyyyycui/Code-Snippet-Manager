@@ -102,6 +102,14 @@ func addSnippet(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	// Prevent duplicates by name
+	for _, s := range snippets {
+		if s.Name == name {
+			fmt.Println("Snippet with this name already exists.")
+			return
+		}
+	}
+
 	newSnippet := Snippet{
 		Name:     name,
 		Language: language,
@@ -115,7 +123,7 @@ func addSnippet(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	fmt.Println("Snippet added:", name)
+	fmt.Printf("Snippet '%s' added successfully.\n", name)
 }
 
 func listSnippets(cmd *cobra.Command, args []string) {
