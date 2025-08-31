@@ -39,6 +39,7 @@ go build -o snip main.go
 - [ ] OpenAI Auto-Tagging and Analysis
 - [ ] Migrate storage from JSON to SQL
 - [X] Add-only file content management
+- [ ] Add PostgreSQL auto-table management
 
 ## Contributing
 

@@ -1,14 +1,14 @@
 package main
 
 import (
-	"encoding/json"
+	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 
+	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +19,7 @@ type Snippet struct {
 	Content  string   `json:"content"`
 }
 
-const snippetFile = "snippets.json"
+// const snippetFile = "snippets.json"
 
 func main() {
 	rootCmd := &cobra.Command{Use: "snip"}
@@ -56,30 +56,6 @@ func main() {
 	}
 }
 
-func loadSnippets() ([]Snippet, error) {
-	if _, err := os.Stat(snippetFile); os.IsNotExist(err) {
-		return []Snippet{}, nil
-	}
-	data, err := ioutil.ReadFile(snippetFile)
-	if err != nil {
-		return nil, err
-	}
-	var snippets []Snippet
-	err = json.Unmarshal(data, &snippets)
-	if err != nil {
-		return nil, err
-	}
-	return snippets, nil
-}
-
-func saveSnippets(snippets []Snippet) error {
-	data, err := json.MarshalIndent(snippets, "", "  ")
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(snippetFile, data, 0644)
-}
-
 func addSnippet(cmd *cobra.Command, args []string) {
 	name, _ := cmd.Flags().GetString("name")
 	language, _ := cmd.Flags().GetString("language")
@@ -91,40 +67,54 @@ func addSnippet(cmd *cobra.Command, args []string) {
 		log.Fatal(err)
 	}
 
-	snippets, err := loadSnippets()
+	// Connect to PostgreSQL and ensure table exists
+	db, err := initDB()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("DB connection error:", err)
 	}
+	defer db.Close()
 
-	newSnippet := Snippet{
-		Name:     name,
-		Language: language,
-		Tags:     strings.Split(tags, ","),
-		Content:  content,
-	}
-
-	snippets = append(snippets, newSnippet)
-	if err := saveSnippets(snippets); err != nil {
-		log.Fatal(err)
+	// Insert snippet into database
+	_, err = db.Exec(
+		`INSERT INTO snippets (name, language, tags, content) VALUES ($1, $2, $3, $4)`,
+		name, language, tags, content,
+	)
+	if err != nil {
+		log.Fatal("Error inserting snippet:", err)
 	}
 
 	fmt.Println("✅ Snippet added:", name)
 }
 
 func listSnippets(cmd *cobra.Command, args []string) {
-	snippets, err := loadSnippets()
+	db, err := initDB()
 	if err != nil {
-		fmt.Println("Error loading snippets:", err)
+		fmt.Println("DB connection error:", err)
 		return
 	}
+	defer db.Close()
 
-	if len(snippets) == 0 {
+	rows, err := db.Query("SELECT id, name, language, tags FROM snippets ORDER BY id")
+	if err != nil {
+		fmt.Println("Error querying snippets:", err)
+		return
+	}
+	defer rows.Close()
+
+	found := false
+	for rows.Next() {
+		var id int
+		var name, language, tags string
+		if err := rows.Scan(&id, &name, &language, &tags); err != nil {
+			fmt.Println("Error scanning row:", err)
+			return
+		}
+		fmt.Printf("[%d] %s (%s) - Tags: %s\n", id, name, language, tags)
+		found = true
+	}
+
+	if !found {
 		fmt.Println("No snippets found.")
-		return
-	}
-
-	for i, s := range snippets {
-		fmt.Printf("[%d] %s (%s) - Tags: %v\n", i+1, s.Name, s.Language, s.Tags)
 	}
 }
 
@@ -135,20 +125,34 @@ func searchSnippets(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	snippets, err := loadSnippets()
+	db, err := initDB()
 	if err != nil {
-		fmt.Println("Error loading snippets:", err)
+		fmt.Println("DB connection error:", err)
 		return
 	}
+	defer db.Close()
+
+	// Search name, content, or tags for the query
+	rows, err := db.Query(
+		`SELECT id, name, language, tags FROM snippets
+         WHERE LOWER(name) LIKE $1 OR LOWER(content) LIKE $1 OR LOWER(tags) LIKE $1
+         ORDER BY id`, "%"+strings.ToLower(query)+"%")
+	if err != nil {
+		fmt.Println("Error querying snippets:", err)
+		return
+	}
+	defer rows.Close()
 
 	found := false
-	for i, s := range snippets {
-		if strings.Contains(strings.ToLower(s.Name), strings.ToLower(query)) ||
-			strings.Contains(strings.ToLower(s.Content), strings.ToLower(query)) ||
-			containsTag(s.Tags, query) {
-			fmt.Printf("[%d] %s (%s) - Tags: %v\n", i+1, s.Name, s.Language, s.Tags)
-			found = true
+	for rows.Next() {
+		var id int
+		var name, language, tags string
+		if err := rows.Scan(&id, &name, &language, &tags); err != nil {
+			fmt.Println("Error scanning row:", err)
+			return
 		}
+		fmt.Printf("[%d] %s (%s) - Tags: %s\n", id, name, language, tags)
+		found = true
 	}
 
 	if !found {
@@ -194,4 +198,25 @@ func openEditor() (string, error) {
 	}
 
 	return string(contentBytes), nil
+}
+
+func initDB() (*sql.DB, error) {
+	connStr := "dbname=snippets sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, err
+	}
+	_, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS snippets (
+            id SERIAL PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            language TEXT,
+            tags TEXT,
+            content TEXT
+        )
+    `)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }
