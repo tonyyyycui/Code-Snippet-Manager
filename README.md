@@ -5,7 +5,7 @@ A simple tool for managing, storing, and organizing code snippets. Built with Go
 
 ## Features
 
-- Store code snippets in a JSON file (with plans to migrate to SQL)
+- Store code snippets in a PostgreSQL database
 - Easily add, search, and manage snippets via CLI
 - Future plans for OpenAI-powered auto-tagging and analysis
 - Environment manager for OpenAI API keys
@@ -28,16 +28,16 @@ go build -o snip main.go
 ### Usage
 
 ```bash
-./snip add "Title" "Your code snippet here" --tags="go,example"
+./snip add -n "Title" -l "go" -t "example"
 ./snip list
-./snip search "keyword"
+./snip search -q "keyword"
 ```
 
-## Roadmap
+## Features Completed
 
-- [ ] OpenAI API Key Environment Manager
-- [ ] OpenAI Auto-Tagging and Analysis
-- [X] Migrate storage from JSON to SQL
+- [X] OpenAI API Key Environment Manager
+- [X] OpenAI Auto-Tagging and Analysis
+- [X] Storage migrated from JSON to SQL (PostgreSQL)
 - [X] Add-only file content management
 - [X] Add PostgreSQL auto-table management
 
