@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	goopenai "github.com/sashabaranov/go-openai"
 	"github.com/spf13/cobra"
 )
 
@@ -74,7 +72,7 @@ func addSnippet(cmd *cobra.Command, args []string) {
 	}
 
 	// Generate GPT tags
-	gptTags, err := generateTagsFromContent(content)
+	gptTags, err := GenerateTagsFromContent(content)
 	if err != nil {
 		fmt.Println("⚠️  Could not generate GPT tags, using user-provided tags.")
 		fmt.Printf("Error details: %v\n", err)
@@ -215,36 +213,6 @@ func openEditor() (string, error) {
 	}
 
 	return string(contentBytes), nil
-}
-
-func generateTagsFromContent(content string) ([]string, error) {
-
-	client := goopenai.NewClient(os.Getenv("YOUR_OPENAI_API_KEY"))
-	ctx := context.Background()
-
-	prompt := fmt.Sprintf(
-		"Given the following code snippet, generate 3-5 concise tags separated by commas:\n\n%s", content,
-	)
-
-	resp, err := client.CreateChatCompletion(ctx, goopenai.ChatCompletionRequest{
-		Model: goopenai.GPT3Dot5Turbo,
-		Messages: []goopenai.ChatCompletionMessage{
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
-		MaxTokens: 60,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	tags := strings.Split(resp.Choices[0].Message.Content, ",")
-	for i := range tags {
-		tags[i] = strings.TrimSpace(tags[i])
-	}
-	return tags, nil
 }
 
 func initDB() (*sql.DB, error) {
